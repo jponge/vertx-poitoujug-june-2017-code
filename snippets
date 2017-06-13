@@ -1,0 +1,132 @@
+= Simple Http server
+
+public class MainVerticle extends AbstractVerticle {
+
+  @Override
+  public void start() {
+    vertx.createHttpServer()
+      .requestHandler(req -> req.response().end("Plop"))
+      .listen(8080);
+  }
+}
+
+= Test with WebClient + Async
+
+@RunWith(VertxUnitRunner.class)
+public class MainVerticleTest {
+
+  @Test
+  public void smoke_test(TestContext testContext) {
+
+    Vertx vertx = Vertx.vertx();
+    Async completion = testContext.async();
+
+    vertx.deployVerticle("livecoding.MainVerticle", testContext.asyncAssertSuccess(id -> {
+
+      WebClient client = WebClient.create(vertx, new WebClientOptions()
+        .setDefaultHost("localhost")
+        .setDefaultPort(8080));
+
+      client.get("/").as(BodyCodec.string()).send(testContext.asyncAssertSuccess(response -> {
+        testContext.assertEquals("Plop", response.body());
+        completion.complete();
+      }));
+    }));
+
+    completion.awaitSuccess(3000);
+  }
+}
+
+= RxJava basic server
+
+package livecoding;
+
+import io.vertx.core.Future;
+import io.vertx.rxjava.core.AbstractVerticle;
+
+public class MainVerticle extends AbstractVerticle {
+
+  @Override
+  public void start(Future<Void> startFuture) {
+
+    vertx.createHttpServer()
+      .requestHandler(req -> req.response().end("Plop"))
+      .rxListen(8080)
+      .retry(5)
+      .toObservable()
+      .subscribe(server -> {
+        System.out.println("Running on port 8080");
+        startFuture.complete();
+      }, Throwable::printStackTrace);
+  }
+}
+
+= RxJava tests
+
+package livecoding;
+
+import io.vertx.ext.unit.Async;
+import io.vertx.ext.unit.TestContext;
+import io.vertx.ext.unit.junit.VertxUnitRunner;
+import io.vertx.ext.web.client.WebClientOptions;
+import io.vertx.rxjava.core.Vertx;
+import io.vertx.rxjava.ext.web.client.WebClient;
+import io.vertx.rxjava.ext.web.codec.BodyCodec;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+@RunWith(VertxUnitRunner.class)
+public class MainVerticleTest {
+
+  @Test
+  public void smoke_test(TestContext testContext) {
+
+    Vertx vertx = Vertx.vertx();
+    Async completion = testContext.async();
+
+    vertx.rxDeployVerticle("livecoding.MainVerticle")
+      .flatMap(id -> {
+        WebClient client = WebClient.create(vertx, new WebClientOptions()
+          .setDefaultHost("localhost")
+          .setDefaultPort(8080));
+        return client.get("/").as(BodyCodec.string()).rxSend();
+      })
+      .toObservable()
+      .subscribe(response -> {
+        testContext.assertEquals("Plop", response.body());
+        completion.complete();
+      }, testContext::fail);
+
+    completion.awaitSuccess(3000);
+  }
+}
+
+= RxJava composition
+
+  @Test
+  public void flux(TestContext testContext) {
+
+    Vertx vertx = Vertx.vertx();
+    Async completion = testContext.async();
+
+    Observable<String> stream1 = vertx.timerStream(500)
+      .toObservable()
+      .map(id -> "{" + id + "}");
+
+    Observable<String> stream2 = vertx.timerStream(1200)
+      .toObservable()
+      .map(id -> "[" + id + "]");
+
+    Observable<String> stream3 = vertx.timerStream(2100)
+      .toObservable()
+      .map(id -> "42");
+
+    Observable
+      .zip(stream1, stream2, stream3, (a, b, c) -> a + "\n" + b + "\n" + c)
+      .subscribe(res -> {
+        System.out.println(res);
+        completion.complete();
+      });
+
+    completion.awaitSuccess(10_000);
+  }
