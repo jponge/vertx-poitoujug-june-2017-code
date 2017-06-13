@@ -17,6 +17,7 @@ def mainVerticleName = 'livecoding.MainVerticle'
 dependencies {
   compile "io.vertx:vertx-core:$vertxVersion"
   compile "io.vertx:vertx-web:$vertxVersion"
+  compile "io.vertx:vertx-web-client:$vertxVersion"
   testCompile "junit:junit:4.12"
   testCompile "io.vertx:vertx-unit:$vertxVersion"
 }
